@@ -1005,8 +1005,9 @@ async function saveModal() {
     dayOfWeek: parseYmd(date).getDay(),
     notes: document.getElementById("evNotes").value.trim()
   };
-  if (editingId) await updateEvent(editingId, data); else await addEvent(data);
+  const id = editingId;
   closeModal();
+  if (id) await updateEvent(id, data); else await addEvent(data);
 }
 
 /* ================= SETTINGS MODAL ================= */
@@ -1118,12 +1119,20 @@ document.getElementById("newEventBtn").onclick = () => {
 };
 document.getElementById("evCancel").onclick = closeModal;
 document.getElementById("evSave").onclick = saveModal;
-document.getElementById("evDelete").onclick = async () => { if (editingId) await deleteEvent(editingId); closeModal(); };
+document.getElementById("evDelete").onclick = async () => { const id = editingId; closeModal(); if (id) await deleteEvent(id); };
 document.getElementById("evDate").onchange = updateRepDayName;
 document.querySelectorAll(".overlay").forEach(ov => ov.addEventListener("click", e => { if (e.target === ov) ov.classList.remove("open"); }));
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") document.querySelectorAll(".overlay.open").forEach(o => o.classList.remove("open"));
-  if (e.key === "Enter" && document.getElementById("overlay").classList.contains("open") && e.target.tagName !== "TEXTAREA") saveModal();
+  const evOpen = document.getElementById("overlay").classList.contains("open");
+  if (e.key === "Enter" && evOpen && e.target.tagName !== "TEXTAREA") saveModal();
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName);
+  if ((e.key === "Delete" || e.key === "Backspace") && evOpen && editingId && !typing) {
+    e.preventDefault();
+    const id = editingId;
+    closeModal();
+    deleteEvent(id);
+  }
 });
 
 // Tasks
