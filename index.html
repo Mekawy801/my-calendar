@@ -119,6 +119,10 @@
   .dayhead .dnum{font-size:17px; font-weight:500; margin-top:1px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%;}
   .dayhead.is-today .dow{color:var(--accent);}
   .dayhead.is-today .dnum{background:var(--accent); color:#fff; font-weight:600;}
+  .allday-wrap{margin-top:4px; display:flex; flex-direction:column; gap:2px;}
+  .allday-chip{font-size:10.5px; line-height:1.35; padding:1px 5px; border-radius:3px; border-left:2.5px solid; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;}
+  .allday-chip.selected{box-shadow:0 0 0 1.5px var(--bg), 0 0 0 3px var(--accent);}
+  .allday-chip .cd{font-weight:600; opacity:.8; margin-left:3px;}
   .bodyrow{display:flex; position:relative;}
   .gutter{position:sticky; left:0; z-index:15; width:56px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);}
   .gutter .hr-label{position:absolute; right:8px; transform:translateY(-50%); font-size:10.5px; color:var(--text-3); white-space:nowrap;}
@@ -270,7 +274,15 @@
     <input type="text" class="title-in" id="evTitle" placeholder="Event title">
     <div class="f-row"><label>Calendar</label><div class="cat-picker" id="evCatPicker"></div></div>
     <div class="f-row"><label>Date</label><input type="date" id="evDate"></div>
-    <div class="f-row">
+    <div class="rep-row" style="margin-bottom:10px;">
+      <input type="checkbox" id="evAllDay">
+      <label for="evAllDay" style="cursor:pointer;">All-day / deadline</label>
+      <span id="deadlineWrap" style="display:none; margin-left:14px;">
+        <input type="checkbox" id="evDeadline" style="margin-right:5px;">
+        <label for="evDeadline" style="cursor:pointer;">show countdown</label>
+      </span>
+    </div>
+    <div class="f-row" id="timeRow">
       <label>Time</label>
       <input type="time" id="evStart" step="300">
       <span style="color:var(--text-3);">–</span>
@@ -280,6 +292,7 @@
       <input type="checkbox" id="evRepeat">
       <label for="evRepeat" style="cursor:pointer;">Repeats every week on <b id="repDayName">this day</b></label>
     </div>
+    <div class="f-row" id="repUntilRow" style="display:none;"><label>Repeat until</label><input type="date" id="evUntil"><button class="btn" id="clearUntil" type="button" style="flex:0 0 auto;">Forever</button></div>
     <div class="f-row"><label>Notes</label><textarea id="evNotes" rows="2" placeholder="Optional"></textarea></div>
     <div class="hint" id="recurHint" style="display:none;">Editing here changes the whole weekly series. Dragging a block on the calendar moves only that day's occurrence.</div>
     <div class="modal-actions">
@@ -469,13 +482,27 @@ let miniCursor = new Date();
 let filters = {};
 let editingId = null;
 
-function eventsOn(date) {
+function occursOn(e, ds, dow) {
+  if (filters[e.category] === false) return false;
+  if (e.recurring) return e.dayOfWeek === dow && (!e.date || ds >= e.date) && (!e.until || ds <= e.until) && !(e.exdates || []).includes(ds);
+  return e.date === ds;
+}
+function eventsOn(date) {   // timed events only
   const ds = ymd(date), dow = date.getDay();
-  return events.filter(e => {
-    if (filters[e.category] === false) return false;
-    if (e.recurring) return e.dayOfWeek === dow && (!e.date || ds >= e.date) && !(e.exdates || []).includes(ds);
-    return e.date === ds;
-  }).sort((a, b) => toMin(a.start) - toMin(b.start));
+  return events.filter(e => !e.allDay && occursOn(e, ds, dow)).sort((a, b) => toMin(a.start) - toMin(b.start));
+}
+function allDayOn(date) {   // all-day / deadline events only
+  const ds = ymd(date), dow = date.getDay();
+  return events.filter(e => e.allDay && occursOn(e, ds, dow));
+}
+function countdownText(ds) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((parseYmd(ds) - today) / 86400000);
+  if (diff === 0) return "today";
+  if (diff === 1) return "tomorrow";
+  if (diff > 1) return diff + "d left";
+  if (diff === -1) return "yesterday";
+  return Math.abs(diff) + "d ago";
 }
 
 /* ================= SIDEBAR: mini month ================= */
@@ -608,8 +635,28 @@ function buildGutter() {
 function buildHead(day) {
   const cell = document.createElement("div");
   cell.className = "dayhead" + (isSameDay(day, new Date()) ? " is-today" : "");
-  cell.innerHTML = `<div class="dow">${DOW_SHORT[day.getDay()]} <span style="font-weight:400;color:var(--text-3)">${day.getDate() === 1 || days.length === 0 ? MONTHS[day.getMonth()].slice(0,3) : ""}</span></div><div class="dnum">${day.getDate()}</div>`;
+  cell.dataset.date = ymd(day);
+  cell.innerHTML = `<div class="dow">${DOW_SHORT[day.getDay()]} <span style="font-weight:400;color:var(--text-3)">${day.getDate() === 1 || days.length === 0 ? MONTHS[day.getMonth()].slice(0,3) : ""}</span></div><div class="dnum">${day.getDate()}</div><div class="allday-wrap"></div>`;
+  renderHeadAllDay(cell, day);
   return cell;
+}
+function renderHeadAllDay(cell, day) {
+  const wrap = cell.querySelector(".allday-wrap");
+  wrap.innerHTML = "";
+  const ds = ymd(day);
+  for (const e of allDayOn(day)) {
+    const c = catById(e.category);
+    const chip = document.createElement("div");
+    chip.className = "allday-chip";
+    if (selectedEvent && selectedEvent.id === e.id && selectedEvent.date === ds) chip.classList.add("selected");
+    chip.style.cssText = `background:${catBg(c.color)}; border-left-color:${c.color}; color:${catText(c.color)};`;
+    chip.innerHTML = `<span class="lbl"></span>${e.deadline ? `<span class="cd">· ${countdownText(ds)}</span>` : ""}`;
+    chip.querySelector(".lbl").textContent = e.title;
+    chip.dataset.id = e.id; chip.dataset.date = ds;
+    chip.addEventListener("mousedown", ev => { ev.stopPropagation(); setSelected({ id: e.id, date: ds }); });
+    chip.addEventListener("dblclick", ev => { ev.stopPropagation(); openModal(e, ds); });
+    wrap.appendChild(chip);
+  }
 }
 
 function buildCol(day) {
@@ -777,7 +824,7 @@ function goToDate(d, smooth = true) {
 }
 
 function refreshTimelineEvents() {
-  for (let i = 0; i < days.length; i++) renderColEvents(cols[i], days[i]);
+  for (let i = 0; i < days.length; i++) { renderColEvents(cols[i], days[i]); renderHeadAllDay(heads[i], days[i]); }
 }
 
 /* ================= DRAG: create / move / resize ================= */
@@ -785,9 +832,9 @@ let drag = null;
 let selectedEvent = null; // { id, date } of the highlighted event
 function setSelected(sel) {
   selectedEvent = sel;
-  document.querySelectorAll(".event.selected").forEach(el => el.classList.remove("selected"));
+  document.querySelectorAll(".event.selected, .allday-chip.selected").forEach(el => el.classList.remove("selected"));
   if (sel) {
-    const el = document.querySelector(`.event[data-id="${sel.id}"][data-date="${sel.date}"]`);
+    const el = document.querySelector(`.event[data-id="${sel.id}"][data-date="${sel.date}"], .allday-chip[data-id="${sel.id}"][data-date="${sel.date}"]`);
     if (el) el.classList.add("selected");
   }
 }
@@ -941,14 +988,15 @@ function renderMonth() {
     num.className = "num";
     num.textContent = day.getDate();
     cell.appendChild(num);
-    const evs = eventsOn(day);
+    const evs = allDayOn(day).concat(eventsOn(day));
     const MAX = 3;
     evs.slice(0, MAX).forEach(e => {
       const c = catById(e.category);
       const chip = document.createElement("div");
       chip.className = "chip";
       chip.style.cssText = `background:${catBg(c.color)}; border-left-color:${c.color}; color:${catText(c.color)};`;
-      chip.innerHTML = `<b>${fmtTime(e.start)}</b> `;
+      if (e.allDay) chip.innerHTML = `<b>${e.deadline ? "⚑ " : ""}</b>`;
+      else chip.innerHTML = `<b>${fmtTime(e.start)}</b> `;
       chip.appendChild(document.createTextNode(e.title));
       chip.onclick = ev => { ev.stopPropagation(); openModal(e, ymd(day)); };
       cell.appendChild(chip);
@@ -988,11 +1036,16 @@ function openModal(event, dateStr, startTime, endTime) {
   document.getElementById("evStart").value = event ? (event.start || "") : (startTime || "");
   document.getElementById("evEnd").value = event ? (event.end || "") : (endTime || "");
   document.getElementById("evRepeat").checked = event ? !!event.recurring : false;
+  document.getElementById("evUntil").value = event ? (event.until || "") : "";
+  document.getElementById("evAllDay").checked = event ? !!event.allDay : false;
+  document.getElementById("evDeadline").checked = event ? !!event.deadline : false;
   document.getElementById("evNotes").value = event ? (event.notes || "") : "";
   document.getElementById("evDelete").style.display = event ? "inline-block" : "none";
   document.getElementById("recurHint").style.display = (event && event.recurring) ? "block" : "none";
   buildCatPicker(event ? event.category : (categories[0] ? categories[0].id : ""));
   updateRepDayName();
+  updateRepUntilRow();
+  updateAllDayRow();
   document.getElementById("overlay").classList.add("open");
   setTimeout(() => document.getElementById("evTitle").focus(), 50);
 }
@@ -1002,19 +1055,35 @@ function updateRepDayName() {
   const v = document.getElementById("evDate").value;
   document.getElementById("repDayName").textContent = v ? DOW_PLURAL[parseYmd(v).getDay()] : "this day";
 }
+function updateRepUntilRow() {
+  document.getElementById("repUntilRow").style.display = document.getElementById("evRepeat").checked ? "flex" : "none";
+}
+function updateAllDayRow() {
+  const on = document.getElementById("evAllDay").checked;
+  document.getElementById("timeRow").style.display = on ? "none" : "flex";
+  document.getElementById("deadlineWrap").style.display = on ? "inline" : "none";
+}
 
 async function saveModal() {
   const title = document.getElementById("evTitle").value.trim();
   const date = document.getElementById("evDate").value;
   if (!title || !date) { document.getElementById("evTitle").focus(); return; }
+  const allDay = document.getElementById("evAllDay").checked;
   const start = document.getElementById("evStart").value || "09:00";
   let end = document.getElementById("evEnd").value || "";
   if (end && toMin(end) <= toMin(start)) end = minToStr(toMin(start) + PREFS.defaultDur);
+  const recurring = document.getElementById("evRepeat").checked;
+  const until = recurring ? (document.getElementById("evUntil").value || "") : "";
   const data = {
     title,
     category: document.getElementById("evCatPicker").dataset.selected,
-    date, start, end,
-    recurring: document.getElementById("evRepeat").checked,
+    date,
+    start: allDay ? "" : start,
+    end: allDay ? "" : end,
+    allDay,
+    deadline: allDay && document.getElementById("evDeadline").checked,
+    recurring,
+    until,
     dayOfWeek: parseYmd(date).getDay(),
     notes: document.getElementById("evNotes").value.trim()
   };
@@ -1110,9 +1179,14 @@ function applySidebar() {
 
 document.getElementById("sidebarToggle").onclick = () => { PREFS.sidebar = !PREFS.sidebar; savePrefs(); applySidebar(); };
 document.getElementById("todayBtn").onclick = () => {
-  if (view === "month") { cursor = new Date(); renderMonth(); renderMini(); }
-  else { goToDate(new Date()); scroller.scrollTo({ top: PREFS.scrollHour * HOUR_PX - 6, behavior: "smooth" }); }
-  miniCursor = new Date(); renderMini();
+  const t = new Date();
+  cursor = t; miniCursor = t;
+  if (view === "month") { renderMonth(); renderMini(); }
+  else {
+    initTimeline(t);              // rebuild centered on today (deterministic)
+    scroller.scrollTop = PREFS.scrollHour * HOUR_PX - 6;
+    renderMini();
+  }
 };
 document.getElementById("prevBtn").onclick = () => {
   if (view === "month") { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); renderMonth(); }
@@ -1134,22 +1208,119 @@ document.getElementById("evCancel").onclick = closeModal;
 document.getElementById("evSave").onclick = saveModal;
 document.getElementById("evDelete").onclick = async () => { const id = editingId; closeModal(); if (id) await deleteEvent(id); };
 document.getElementById("evDate").onchange = updateRepDayName;
+document.getElementById("evRepeat").onchange = updateRepUntilRow;
+document.getElementById("evAllDay").onchange = updateAllDayRow;
+document.getElementById("clearUntil").onclick = () => { document.getElementById("evUntil").value = ""; };
 document.querySelectorAll(".overlay").forEach(ov => ov.addEventListener("click", e => { if (e.target === ov) ov.classList.remove("open"); }));
+/* ================= CLIPBOARD + UNDO ================= */
+let clipboard = null;         // a plain event object (no id)
+let lastGridPos = null;       // {date, min} of cursor over the grid, for paste
+const undoStack = [];         // inverse operations, most recent last
+
+scroller.addEventListener("mousemove", ev => {
+  if (view !== "week") return;
+  const p = posFromMouse(ev);
+  if (p.dayIdx >= 0 && p.dayIdx < days.length) lastGridPos = { date: ymd(days[p.dayIdx]), min: p.min };
+});
+
+function pushUndo(op) { undoStack.push(op); if (undoStack.length > 30) undoStack.shift(); }
+
+// Undoable primitives: each records how to reverse itself
+async function createEventUndoable(data) {
+  const ref = db ? await db.collection("cal_events").add(data) : null;
+  if (db) { pushUndo({ type: "delId", id: ref.id }); }
+  else { const id = uid(); events.push({ id, ...data }); saveLocal(); renderAll(); pushUndo({ type: "delId", id }); }
+}
+async function deleteEventUndoable(id) {
+  const snapshot = events.find(e => e.id === id);
+  if (!snapshot) return;
+  const { id: _omit, ...data } = snapshot;
+  pushUndo({ type: "recreate", data });
+  await deleteEvent(id);
+}
+async function excludeOccurrenceUndoable(ev, dateStr) {
+  pushUndo({ type: "unexclude", id: ev.id, date: dateStr });
+  await addExdate(ev, dateStr);
+}
+async function performUndo() {
+  const op = undoStack.pop();
+  if (!op) return;
+  if (op.type === "recreate") await addEvent(op.data);
+  else if (op.type === "delId") await deleteEvent(op.id);
+  else if (op.type === "unexclude") {
+    if (db) await db.collection("cal_events").doc(op.id).update({ exdates: firebase.firestore.FieldValue.arrayRemove(op.date) });
+    else { const e = events.find(x => x.id === op.id); if (e && e.exdates) e.exdates = e.exdates.filter(d => d !== op.date); saveLocal(); renderAll(); }
+  }
+}
+
+function eventToClipboard(sel) {
+  const ev = events.find(e => e.id === sel.id);
+  if (!ev) return null;
+  const { id, exdates, recurring, until, dayOfWeek, ...rest } = ev;
+  // Copies become standalone (non-recurring) single events
+  return { ...rest, recurring: false, occDate: sel.date };
+}
+
+async function pasteAt(pos) {
+  if (!clipboard || !pos) return;
+  const c = clipboard;
+  let start = c.start, end = c.end;
+  if (!c.allDay && c.start) {
+    const dur = (toMin(c.end) || toMin(c.start) + PREFS.defaultDur) - toMin(c.start);
+    const ns = snapMin(pos.min);
+    start = minToStr(ns); end = minToStr(Math.min(DAY_MIN, ns + dur));
+  }
+  const data = {
+    title: c.title, category: c.category, date: pos.date,
+    start: c.allDay ? "" : start, end: c.allDay ? "" : end,
+    allDay: !!c.allDay, deadline: !!c.deadline,
+    recurring: false, until: "", dayOfWeek: parseYmd(pos.date).getDay(),
+    notes: c.notes || ""
+  };
+  await createEventUndoable(data);
+}
+
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") { document.querySelectorAll(".overlay.open").forEach(o => o.classList.remove("open")); setSelected(null); }
   const evOpen = document.getElementById("overlay").classList.contains("open");
   if (e.key === "Enter" && evOpen && e.target.tagName !== "TEXTAREA") saveModal();
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName);
-  if ((e.key === "Delete" || e.key === "Backspace") && !typing) {
-    if (evOpen && editingId) { e.preventDefault(); const id = editingId; closeModal(); deleteEvent(id); }
+  const mod = e.metaKey || e.ctrlKey;
+
+  // Delete
+  if ((e.key === "Delete" || e.key === "Backspace") && !typing && !mod) {
+    if (evOpen && editingId) { e.preventDefault(); const id = editingId; closeModal(); deleteEventUndoable(id); }
     else if (!evOpen && selectedEvent) {
       e.preventDefault();
       const sel = selectedEvent, ev = events.find(x => x.id === sel.id);
       setSelected(null);
-      if (ev && ev.recurring) addExdate(ev, sel.date);  // delete just this occurrence
-      else deleteEvent(sel.id);
+      if (ev && ev.recurring) excludeOccurrenceUndoable(ev, sel.date);
+      else deleteEventUndoable(sel.id);
     }
+    return;
   }
+  if (typing || evOpen) return;
+
+  // Copy
+  if (mod && e.key.toLowerCase() === "c" && selectedEvent) { e.preventDefault(); clipboard = eventToClipboard(selectedEvent); }
+  // Cut
+  else if (mod && e.key.toLowerCase() === "x" && selectedEvent) {
+    e.preventDefault();
+    clipboard = eventToClipboard(selectedEvent);
+    const sel = selectedEvent, ev = events.find(x => x.id === sel.id);
+    setSelected(null);
+    if (ev && ev.recurring) excludeOccurrenceUndoable(ev, sel.date); else deleteEventUndoable(sel.id);
+  }
+  // Paste at cursor
+  else if (mod && e.key.toLowerCase() === "v" && clipboard) { e.preventDefault(); pasteAt(lastGridPos); }
+  // Duplicate in place
+  else if (mod && e.key.toLowerCase() === "d" && selectedEvent) {
+    e.preventDefault();
+    const clip = eventToClipboard(selectedEvent);
+    if (clip) { clipboard = clip; pasteAt({ date: clip.occDate, min: toMin(clip.start || "09:00") + 0 }); }
+  }
+  // Undo
+  else if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); performUndo(); }
 });
 
 // Tasks
