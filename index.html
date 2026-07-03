@@ -746,8 +746,17 @@ function initTimeline(centerDate) {
     heads.push(h); cols.push(c);
     headRow.appendChild(h); bodyRow.appendChild(c);
   }
-  scroller.scrollLeft = 21 * dayW();
+  const targetLeft = 21 * dayW();
+  scroller.scrollLeft = targetLeft;
   scroller.scrollTop = PREFS.scrollHour * HOUR_PX - 6;
+  // Re-assert after layout settles (first assignment can be dropped before columns have width)
+  requestAnimationFrame(() => {
+    scroller.scrollLeft = 21 * dayW();
+    const todayCol = cols[21];
+    if (todayCol && Math.abs(scroller.scrollLeft - 21 * dayW()) > 4) {
+      todayCol.scrollIntoView({ inline: "start", block: "nearest" });
+    }
+  });
   updateRangeLabel();
 }
 
