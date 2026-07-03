@@ -479,7 +479,8 @@ function isSameDay(a, b) { return ymd(a) === ymd(b); }
 let view = "week";
 let cursor = new Date();
 let miniCursor = new Date();
-let filters = {};
+let filters = JSON.parse(localStorage.getItem("cal_filters") || "{}");
+function saveFilters() { localStorage.setItem("cal_filters", JSON.stringify(filters)); }
 let editingId = null;
 
 function occursOn(e, ds, dow) {
@@ -540,7 +541,7 @@ function renderFilters() {
     row.className = "filter-row" + (on ? "" : " off");
     row.innerHTML = `<span class="swatch" style="background:${c.color}"></span><span class="name"></span><span class="check">${on ? "✓" : ""}</span>`;
     row.querySelector(".name").textContent = c.label;
-    row.onclick = () => { filters[c.id] = !on; renderAll(); };
+    row.onclick = () => { filters[c.id] = !on; saveFilters(); renderAll(); };
     box.appendChild(row);
   }
 }
