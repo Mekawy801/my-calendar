@@ -205,6 +205,46 @@
   ::-webkit-scrollbar{width:10px; height:10px;}
   ::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:5px; border:2px solid var(--bg);}
 
+  /* ---------- Agenda view ---------- */
+  .agenda-wrap{flex:1; overflow-y:auto; padding:0 0 90px; min-height:0;}
+  .ag-month{padding:16px 18px 6px; font-size:13px; font-weight:600; color:var(--text-2); position:sticky; top:0; background:var(--bg); z-index:2;}
+  .ag-day{display:flex; gap:14px; padding:10px 18px; border-bottom:1px solid var(--border);}
+  .ag-day.past{opacity:.55;}
+  .ag-date{width:50px; flex-shrink:0; text-align:center;}
+  .ag-date .dow{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-3);}
+  .ag-date .dnum{font-size:19px; font-weight:500; width:34px; height:34px; margin:2px auto 0; display:flex; align-items:center; justify-content:center; border-radius:50%;}
+  .ag-day.is-today .dow{color:var(--accent);}
+  .ag-day.is-today .dnum{background:var(--accent); color:#fff; font-weight:600;}
+  .ag-items{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; padding-top:2px;}
+  .ag-item{display:flex; gap:10px; padding:7px 10px; border-radius:6px; cursor:pointer; max-width:640px;}
+  .ag-item:hover{filter:brightness(.97);}
+  [data-theme=dark] .ag-item:hover{filter:brightness(1.1);}
+  .ag-item .bar{width:3px; border-radius:2px; flex-shrink:0;}
+  .ag-item .main{flex:1; min-width:0;}
+  .ag-item .ttl{font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .ag-item .sub{font-size:12px; opacity:.8; margin-top:1px;}
+  .ag-item.ended{opacity:.5;}
+  .ag-empty{font-size:13px; color:var(--text-3); padding:8px 0;}
+  .ag-more{display:block; margin:14px auto;}
+
+  /* ---------- Hours report ---------- */
+  .hours-tabs{display:flex; gap:4px;}
+  .hours-tabs button{font-size:11px; padding:1px 8px; border-radius:10px; color:var(--text-3); text-transform:none; letter-spacing:0; font-weight:500;}
+  .hours-tabs button.on{background:var(--hover); color:var(--text);}
+  .hours-range{font-size:11.5px; color:var(--text-3); margin:-2px 0 8px;}
+  .hours-row{display:flex; align-items:center; gap:8px; font-size:12.5px; padding:3px 0;}
+  .hours-row .nm{width:96px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .hours-row .track{flex:1; height:6px; background:var(--hover); border-radius:3px; overflow:hidden;}
+  .hours-row .fill{height:100%; border-radius:3px;}
+  .hours-row .val{width:46px; text-align:right; color:var(--text-2); font-variant-numeric:tabular-nums;}
+  .hours-total{font-size:12px; font-weight:600; margin-top:6px; display:flex; justify-content:space-between;}
+  .day-hours{font-size:10px; color:var(--text-3); margin-top:2px; font-weight:500;}
+  .day-hours:empty{display:none;}
+
+  /* ---------- "Only this / following / all" chooser ---------- */
+  .recur-opts{display:flex; flex-direction:column; gap:8px;}
+  .recur-opts .btn{padding:10px 12px; text-align:left;}
+
   /* ---------- Phone mode (only kicks in on narrow screens) ---------- */
   .phone-only{display:none !important;}
   .fab{position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom)); width:54px; height:54px; border-radius:50%; background:var(--accent); color:#fff; font-size:28px; font-weight:400; line-height:1; box-shadow:0 6px 18px rgba(0,0,0,.22); z-index:40; align-items:center; justify-content:center;}
@@ -268,6 +308,10 @@
   body.phone .f-row input[type=time]{min-width:0;}
   body.phone .modal-actions .btn{padding:9px 14px;}
   body.phone .cat-pill{padding:6px 12px; font-size:13px;}
+  body.phone:not(.view-week) #dayCountBtn{display:none !important;}
+  body.phone .ag-day{padding:10px 12px; gap:10px;}
+  body.phone .ag-date{width:40px;}
+  body.phone .ag-month{padding:14px 12px 6px;}
 </style>
 </head>
 <body>
@@ -288,6 +332,7 @@
   <button class="btn phone-only" id="dayCountBtn" title="Days shown">3D</button>
   <div class="seg">
     <button id="weekViewBtn" class="active">Days</button>
+    <button id="agendaViewBtn">List</button>
     <button id="monthViewBtn">Month</button>
   </div>
   <button class="icon-btn" id="settingsBtn" title="Settings">⚙︎</button>
@@ -315,6 +360,12 @@
       <div id="filterList"></div>
     </div>
 
+    <div class="side-section" id="hoursSection" style="display:none;">
+      <div class="side-title">Hours <span class="hours-tabs" id="hoursTabs"><button data-p="week">Week</button><button data-p="month">Month</button></span></div>
+      <div class="hours-range" id="hoursRange"></div>
+      <div id="hoursList"></div>
+    </div>
+
     <div class="side-section" style="flex:1;">
       <div class="side-title">Tasks <button class="clear-done" id="clearDone" style="display:none;">Clear done</button></div>
       <div class="task-add">
@@ -338,6 +389,7 @@
         </div>
       </div>
     </div>
+    <div id="agendaView" class="agenda-wrap" style="display:none;"><div id="agendaList"></div></div>
     <div id="monthView" class="month-wrap" style="display:none;">
       <div class="month-dow-row" id="monthDowRow"></div>
       <div class="month-grid" id="monthGrid"></div>
@@ -372,13 +424,26 @@
     </div>
     <div class="f-row" id="repUntilRow" style="display:none;"><label>Repeat until</label><input type="date" id="evUntil"><button class="btn" id="clearUntil" type="button" style="flex:0 0 auto;">Forever</button></div>
     <div class="f-row"><label>Notes</label><textarea id="evNotes" rows="2" placeholder="Optional"></textarea></div>
-    <div class="hint" id="recurHint" style="display:none;">Editing here changes the whole weekly series. Dragging a block on the calendar moves only that day's occurrence.</div>
+    <div class="hint" id="recurHint" style="display:none;">When you save, you choose: only this day, this and following, or all. Dragging a block on the calendar moves only that day.</div>
     <div class="modal-actions">
       <button class="btn danger" id="evDelete" style="display:none;">Delete</button>
       <div class="spacer"></div>
       <button class="btn" id="evCancel">Cancel</button>
       <button class="btn primary" id="evSave">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- Repeating event: only this / following / all -->
+<div class="overlay" id="recurOverlay">
+  <div class="modal" style="width:340px;">
+    <h2 id="recurTitle">Change repeating event</h2>
+    <div class="recur-opts">
+      <button class="btn" data-r="one">Only this event</button>
+      <button class="btn" data-r="future">This and following events</button>
+      <button class="btn" data-r="all">All events</button>
+    </div>
+    <div class="modal-actions"><div class="spacer"></div><button class="btn" data-r="">Cancel</button></div>
   </div>
 </div>
 
@@ -403,6 +468,9 @@
     </div>
     <div class="f-row"><label>New events last</label>
       <select id="setDefaultDur"><option value="30">30 min</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select>
+    </div>
+    <div class="f-row"><label>Hours report</label>
+      <select id="setShowHours"><option value="0">Off</option><option value="1">On</option></select>
     </div>
     <div class="f-row desk-only"><label>Column width</label>
       <input type="range" id="setDayW" min="110" max="280" step="10">
@@ -467,7 +535,7 @@ let GUTTER_W = 56;          // 42 in phone mode
 const DAY_MIN = 24 * 60;
 
 /* ================= PREFERENCES (device-local, editable in Settings) ================= */
-const DEFAULT_PREFS = { theme: "light", weekStart: 6, hour12: true, snap: 5, defaultDur: 60, dayW: 150, scrollHour: 7, sidebar: true, phoneDays: 3 };
+const DEFAULT_PREFS = { theme: "light", weekStart: 6, hour12: true, snap: 5, defaultDur: 60, dayW: 150, scrollHour: 7, sidebar: true, phoneDays: 3, showHours: false, hoursPeriod: "week" };
 let PREFS = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem("cal_prefs") || "{}") };
 function savePrefs() { localStorage.setItem("cal_prefs", JSON.stringify(PREFS)); }
 
@@ -694,7 +762,7 @@ function renderMini() {
     if (day.getMonth() !== m) cell.classList.add("dim");
     if (isSameDay(day, new Date())) cell.classList.add("today");
     cell.textContent = day.getDate();
-    cell.onclick = () => { cursor = day; openDrawer(false); if (view === "month") { miniCursor = new Date(day); renderAll(); } else goToDate(day); };
+    cell.onclick = () => { cursor = day; openDrawer(false); if (view === "month") { miniCursor = new Date(day); renderAll(); } else if (view === "agenda") { agendaStart = new Date(day); agendaJump = true; renderAgenda(); } else goToDate(day); };
     grid.appendChild(cell);
   }
 }
@@ -805,11 +873,13 @@ function buildHead(day) {
   const cell = document.createElement("div");
   cell.className = "dayhead" + (isSameDay(day, new Date()) ? " is-today" : "");
   cell.dataset.date = ymd(day);
-  cell.innerHTML = `<div class="dow">${DOW_SHORT[day.getDay()]} <span style="font-weight:400;color:var(--text-3)">${day.getDate() === 1 || days.length === 0 ? MONTHS[day.getMonth()].slice(0,3) : ""}</span></div><div class="dnum">${day.getDate()}</div><div class="allday-wrap"></div>`;
+  cell.innerHTML = `<div class="dow">${DOW_SHORT[day.getDay()]} <span style="font-weight:400;color:var(--text-3)">${day.getDate() === 1 || days.length === 0 ? MONTHS[day.getMonth()].slice(0,3) : ""}</span></div><div class="dnum">${day.getDate()}</div><div class="day-hours"></div><div class="allday-wrap"></div>`;
   renderHeadAllDay(cell, day);
   return cell;
 }
 function renderHeadAllDay(cell, day) {
+  const dh = cell.querySelector(".day-hours");
+  if (dh) { const m = PREFS.showHours ? eventsOn(day).reduce((t, e) => t + durMin(e), 0) : 0; dh.textContent = m ? fmtH(m) : ""; }
   const wrap = cell.querySelector(".allday-wrap");
   wrap.innerHTML = "";
   const ds = ymd(day);
@@ -976,14 +1046,15 @@ function updateRangeLabel() {
   const a = days[idx], b = days[Math.min(days.length - 1, idx + (isPhone ? PREFS.phoneDays - 1 : 6))];
   cursor = a;
   const label = isPhone
-    ? (a.getMonth() === b.getMonth() ? MONTHS[a.getMonth()].slice(0, 3) + " " + a.getFullYear()
-        : MONTHS[a.getMonth()].slice(0, 3) + " – " + MONTHS[b.getMonth()].slice(0, 3) + " " + b.getFullYear())
+    ? (a.getMonth() === b.getMonth() ? MONTHS[a.getMonth()].slice(0, 3) : MONTHS[a.getMonth()].slice(0, 3) + "–" + MONTHS[b.getMonth()].slice(0, 3))
+      + (b.getFullYear() !== new Date().getFullYear() ? " " + b.getFullYear() : "")
     : a.getMonth() === b.getMonth()
     ? MONTHS[a.getMonth()] + " " + a.getDate() + " – " + b.getDate() + ", " + b.getFullYear()
     : MONTHS[a.getMonth()].slice(0, 3) + " " + a.getDate() + " – " + MONTHS[b.getMonth()].slice(0, 3) + " " + b.getDate() + ", " + b.getFullYear();
   document.getElementById("rangeLabel").textContent = label;
   const mm = new Date(a.getFullYear(), a.getMonth(), 1);
   if (mm.getTime() !== new Date(miniCursor.getFullYear(), miniCursor.getMonth(), 1).getTime()) { miniCursor = mm; renderMini(); }
+  if (PREFS.showHours) renderHours();
 }
 
 let scrollRAF = null;
@@ -1253,6 +1324,162 @@ window.addEventListener("touchend", ev => {
   if (drag && drag.touch) { ev.preventDefault(); stopEdge(); dragEnd(); }
 }, { passive: false });
 window.addEventListener("touchcancel", () => { cancelLP(); if (drag && drag.touch) { stopEdge(); cancelDrag(); refreshTimelineEvents(); } });
+/* ================= HOURS REPORT ================= */
+function durMin(e) { return Math.max(0, (toMin(e.end) || toMin(e.start) + 60) - toMin(e.start)); }
+function fmtH(min) { const h = Math.floor(min / 60), m = min % 60; return h ? h + "h" + (m ? " " + m + "m" : "") : m + "m"; }
+function occursRaw(e, ds, dow) {   // like occursOn, but ignores hidden calendars
+  if (e.recurring) return e.dayOfWeek === dow && (!e.date || ds >= e.date) && (!e.until || ds <= e.until) && !(e.exdates || []).includes(ds);
+  return e.date === ds;
+}
+function renderHours() {
+  const sec = document.getElementById("hoursSection");
+  sec.style.display = PREFS.showHours ? "" : "none";
+  if (!PREFS.showHours) return;
+  document.querySelectorAll("#hoursTabs button").forEach(b => b.classList.toggle("on", b.dataset.p === PREFS.hoursPeriod));
+  let a, b;
+  if (PREFS.hoursPeriod === "month") { a = new Date(cursor.getFullYear(), cursor.getMonth(), 1); b = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0); }
+  else { a = startOfWeek(cursor); b = addDays(a, 6); }
+  const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  document.getElementById("hoursRange").textContent = PREFS.hoursPeriod === "month" ? MONTHS[a.getMonth()] + " " + a.getFullYear() : fmt(a) + " – " + fmt(b);
+  const per = {};
+  for (let d = new Date(a); d <= b; d = addDays(d, 1)) {
+    const ds = ymd(d), dow = d.getDay();
+    for (const e of events) if (!e.allDay && occursRaw(e, ds, dow)) per[e.category] = (per[e.category] || 0) + durMin(e);
+  }
+  const rows = Object.entries(per).filter(([, m]) => m > 0).sort((x, y) => y[1] - x[1]);
+  const list = document.getElementById("hoursList");
+  list.innerHTML = "";
+  if (!rows.length) { list.innerHTML = '<div class="empty-note">No timed events in this period.</div>'; return; }
+  const max = rows[0][1], total = rows.reduce((t, [, m]) => t + m, 0);
+  for (const [cid, m] of rows) {
+    const c = catById(cid);
+    const r = document.createElement("div");
+    r.className = "hours-row";
+    r.innerHTML = `<span class="nm"></span><span class="track"><span class="fill" style="display:block; width:${Math.max(4, m / max * 100)}%; background:${c.color}"></span></span><span class="val">${fmtH(m)}</span>`;
+    r.querySelector(".nm").textContent = c.label;
+    list.appendChild(r);
+  }
+  const t = document.createElement("div");
+  t.className = "hours-total";
+  t.innerHTML = `<span>Total</span><span>${fmtH(total)}</span>`;
+  list.appendChild(t);
+}
+
+/* ================= AGENDA (LIST) VIEW ================= */
+let agendaStart = null, agendaDays = 45, agendaJump = true;
+function renderAgenda() {
+  if (!agendaStart) { agendaStart = new Date(); agendaStart.setHours(0, 0, 0, 0); }
+  cursor = agendaStart;
+  document.getElementById("rangeLabel").textContent = isPhone ? "Agenda" : "Agenda · from " + agendaStart.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const box = document.getElementById("agendaList");
+  box.innerHTML = "";
+  const todayS = ymd(new Date()), nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const earlier = document.createElement("button");
+  earlier.className = "btn ag-more"; earlier.textContent = "Show earlier";
+  earlier.onclick = () => { agendaStart = addDays(agendaStart, -14); agendaDays += 14; renderAgenda(); };
+  box.appendChild(earlier);
+  let lastMonth = -1, todayEl = null;
+  for (let i = 0; i < agendaDays; i++) {
+    const day = addDays(agendaStart, i), ds = ymd(day);
+    const items = allDayOn(day).concat(eventsOn(day));
+    const isToday = ds === todayS;
+    if (!items.length && !isToday) continue;
+    if (day.getMonth() !== lastMonth) {
+      lastMonth = day.getMonth();
+      const mh = document.createElement("div");
+      mh.className = "ag-month"; mh.textContent = MONTHS[lastMonth] + " " + day.getFullYear();
+      box.appendChild(mh);
+    }
+    const row = document.createElement("div");
+    row.className = "ag-day" + (isToday ? " is-today" : "") + (ds < todayS ? " past" : "");
+    row.innerHTML = `<div class="ag-date"><div class="dow">${DOW_SHORT[day.getDay()]}</div><div class="dnum">${day.getDate()}</div></div><div class="ag-items"></div>`;
+    const list = row.querySelector(".ag-items");
+    if (!items.length) list.innerHTML = '<div class="ag-empty">Nothing today</div>';
+    for (const e of items) {
+      const c = catById(e.category);
+      const it = document.createElement("div");
+      it.className = "ag-item" + (isToday && !e.allDay && toMin(e.end || e.start) + (e.end ? 0 : 60) <= nowMin ? " ended" : "");
+      it.style.cssText = `background:${catBg(c.color)}; color:${catText(c.color)};`;
+      const when = e.allDay ? (e.deadline ? "Deadline · " + countdownText(ds) : "All day") : fmtTime(e.start) + (e.end ? " – " + fmtTime(e.end) : "");
+      it.innerHTML = `<span class="bar" style="background:${c.color}"></span><div class="main"><div class="ttl"></div><div class="sub"></div></div>`;
+      it.querySelector(".ttl").textContent = (e.deadline ? "⚑ " : "") + e.title;
+      it.querySelector(".sub").textContent = when + " · " + c.label + (e.recurring ? " · ↻" : "");
+      it.onclick = () => openModal(e, ds);
+      list.appendChild(it);
+    }
+    if (isToday) todayEl = row;
+    box.appendChild(row);
+  }
+  const more = document.createElement("button");
+  more.className = "btn ag-more"; more.textContent = "Show 30 more days";
+  more.onclick = () => { agendaDays += 30; renderAgenda(); };
+  box.appendChild(more);
+  if (agendaJump) {
+    agendaJump = false;
+    const wrap = document.getElementById("agendaView");
+    wrap.scrollTop = 0;
+    if (todayEl) wrap.scrollTop = todayEl.getBoundingClientRect().top - wrap.getBoundingClientRect().top - 44;
+  }
+  if (PREFS.showHours) renderHours();
+}
+
+/* ================= REPEATING EVENTS: only this / following / all ================= */
+function askRecur(title) {
+  return new Promise(res => {
+    const ov = document.getElementById("recurOverlay");
+    document.getElementById("recurTitle").textContent = title;
+    ov.classList.add("open");
+    const done = v => { ov.classList.remove("open"); ov.querySelectorAll("[data-r]").forEach(b => b.onclick = null); ov.onclick = null; res(v); };
+    ov.querySelectorAll("[data-r]").forEach(b => b.onclick = () => done(b.dataset.r || null));
+    ov.onclick = e => { if (e.target === ov) done(null); };
+  });
+}
+function firstOccurrence(e) {
+  if (!e.date) return "0000-00-00";
+  let d = parseYmd(e.date);
+  for (let i = 0; i < 400; i++, d = addDays(d, 1)) {
+    const ds = ymd(d);
+    if (e.until && ds > e.until) break;
+    if (d.getDay() === e.dayOfWeek && !(e.exdates || []).includes(ds)) return ds;
+  }
+  return e.date;
+}
+const dayBefore = ds => ymd(addDays(parseYmd(ds), -1));
+async function applyRecurringEdit(orig, occ, data, choice) {
+  if (choice === "future" && occ <= firstOccurrence(orig)) choice = "all";
+  if (choice === "one") {
+    await addExdate(orig, occ);
+    await addEvent({ ...data, recurring: false, until: "" });
+  } else if (choice === "future") {
+    await updateEvent(orig.id, { until: dayBefore(occ) });
+    await addEvent({ ...data, exdates: data.recurring ? (orig.exdates || []).filter(d => d >= occ) : [] });
+  } else if (!data.recurring) {
+    await updateEvent(orig.id, { ...data, exdates: [] });            // series turned into a single event
+  } else {
+    const shift = Math.round((parseYmd(data.date) - parseYmd(occ)) / 86400000);
+    const start = ymd(addDays(parseYmd(orig.date || occ), shift));
+    await updateEvent(orig.id, { ...data, date: start, dayOfWeek: parseYmd(start).getDay(), exdates: shift ? [] : (orig.exdates || []) });
+  }
+  toast(choice === "one" ? "Changed this day only" : choice === "future" ? "Changed this and following" : "Changed all events");
+}
+async function deleteFromModal() {
+  const id = editingId, occ = editingOcc, orig = events.find(e => e.id === id);
+  if (!orig) { closeModal(); return; }
+  if (orig.recurring) {
+    let choice = await askRecur("Delete repeating event");
+    if (!choice) return;
+    closeModal();
+    if (choice === "future" && occ <= firstOccurrence(orig)) choice = "all";
+    if (choice === "one") await excludeOccurrenceUndoable(orig, occ);
+    else if (choice === "future") { pushUndo({ type: "restoreUntil", id, until: orig.until || "" }); await updateEvent(id, { until: dayBefore(occ) }); }
+    else await deleteEventUndoable(id);
+    toast(choice === "one" ? "Deleted this day" : choice === "future" ? "Deleted this and following" : "Deleted all events");
+    return;
+  }
+  closeModal();
+  await deleteEventUndoable(id);
+}
+
 /* ================= MONTH VIEW ================= */
 function renderMonth() {
   const y = cursor.getFullYear(), m = cursor.getMonth();
@@ -1315,11 +1542,13 @@ function buildCatPicker(selected) {
   box.dataset.selected = selected;
 }
 
+let editingOcc = null;   // the day that was clicked (for repeating events)
 function openModal(event, dateStr, startTime, endTime) {
   editingId = event ? event.id : null;
+  editingOcc = event ? (event.recurring ? dateStr : event.date) : null;
   document.getElementById("modalTitle").textContent = event ? "Edit event" : "New event";
   document.getElementById("evTitle").value = event ? event.title : "";
-  document.getElementById("evDate").value = event ? (event.date || dateStr) : (dateStr || ymd(new Date()));
+  document.getElementById("evDate").value = event ? (event.recurring ? dateStr : (event.date || dateStr)) : (dateStr || ymd(new Date()));
   document.getElementById("evStart").value = event ? (event.start || "") : (startTime || "");
   document.getElementById("evEnd").value = event ? (event.end || "") : (endTime || "");
   document.getElementById("evRepeat").checked = event ? !!event.recurring : false;
@@ -1352,6 +1581,7 @@ function updateAllDayRow() {
 }
 
 async function saveModal() {
+  if (document.getElementById("recurOverlay").classList.contains("open")) return;
   const title = document.getElementById("evTitle").value.trim();
   const date = document.getElementById("evDate").value;
   if (!title || !date) { document.getElementById("evTitle").focus(); return; }
@@ -1374,7 +1604,18 @@ async function saveModal() {
     dayOfWeek: parseYmd(date).getDay(),
     notes: document.getElementById("evNotes").value.trim()
   };
-  const id = editingId;
+  const id = editingId, occ = editingOcc;
+  const orig = id ? events.find(e => e.id === id) : null;
+  if (orig && orig.recurring) {
+    const same = ["title", "category", "start", "end", "allDay", "deadline", "notes", "until"].every(k => (orig[k] || "") === (data[k] || ""))
+      && data.recurring && data.date === occ;
+    if (same) { closeModal(); return; }
+    const choice = await askRecur("Change repeating event");
+    if (!choice) return;
+    closeModal();
+    await applyRecurringEdit(orig, occ, data, choice);
+    return;
+  }
   closeModal();
   if (id) await updateEvent(id, data); else await addEvent(data);
 }
@@ -1389,6 +1630,7 @@ function openSettings() {
   document.getElementById("setDayW").value = PREFS.dayW;
   document.getElementById("setScrollHour").value = String(PREFS.scrollHour);
   document.getElementById("setPhoneDays").value = String(PREFS.phoneDays);
+  document.getElementById("setShowHours").value = PREFS.showHours ? "1" : "0";
   document.getElementById("settingsOverlay").classList.add("open");
 }
 function bindSettings() {
@@ -1409,6 +1651,7 @@ function bindSettings() {
     scroller.scrollLeft = idx * dayW();
   };
   document.getElementById("setScrollHour").onchange = e => { PREFS.scrollHour = +e.target.value; savePrefs(); };
+  document.getElementById("setShowHours").onchange = e => { PREFS.showHours = e.target.value === "1"; savePrefs(); renderAll(); };
   document.getElementById("setPhoneDays").onchange = e => relayout(() => { PREFS.phoneDays = +e.target.value; savePrefs(); });
   document.getElementById("settingsBtn").onclick = openSettings;
   document.getElementById("settingsClose").onclick = () => document.getElementById("settingsOverlay").classList.remove("open");
@@ -1449,8 +1692,12 @@ function setView(v) {
   view = v;
   document.getElementById("weekViewBtn").classList.toggle("active", v === "week");
   document.getElementById("monthViewBtn").classList.toggle("active", v === "month");
+  document.getElementById("agendaViewBtn").classList.toggle("active", v === "agenda");
   document.getElementById("weekView").style.display = v === "week" ? "flex" : "none";
   document.getElementById("monthView").style.display = v === "month" ? "flex" : "none";
+  document.getElementById("agendaView").style.display = v === "agenda" ? "block" : "none";
+  ["week", "month", "agenda"].forEach(x => document.body.classList.toggle("view-" + x, v === x));
+  if (v === "agenda") agendaJump = true;
   if (v === "week") updateRangeLabel();
   renderAll();
 }
@@ -1459,7 +1706,8 @@ function renderAll() {
   renderMini();
   renderFilters();
   renderTasks();
-  if (view === "week") refreshTimelineEvents(); else renderMonth();
+  if (view === "week") refreshTimelineEvents(); else if (view === "agenda") renderAgenda(); else renderMonth();
+  renderHours();
 }
 
 function applySidebar() {
@@ -1492,6 +1740,7 @@ document.getElementById("todayBtn").onclick = () => {
   const t = new Date();
   cursor = t; miniCursor = t;
   if (view === "month") { renderMonth(); renderMini(); }
+  else if (view === "agenda") { agendaStart = null; agendaDays = 45; agendaJump = true; renderAgenda(); renderMini(); }
   else {
     initTimeline(t);              // rebuild centered on today (deterministic)
     scroller.scrollTop = PREFS.scrollHour * HOUR_PX - 6;
@@ -1500,16 +1749,20 @@ document.getElementById("todayBtn").onclick = () => {
 };
 document.getElementById("prevBtn").onclick = () => {
   if (view === "month") { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); renderMonth(); }
+  else if (view === "agenda") { agendaStart = addDays(agendaStart, -7); agendaJump = true; renderAgenda(); }
   else scroller.scrollBy({ left: -7 * dayW(), behavior: "smooth" });
 };
 document.getElementById("nextBtn").onclick = () => {
   if (view === "month") { cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1); renderMonth(); }
+  else if (view === "agenda") { agendaStart = addDays(agendaStart, 7); agendaJump = true; renderAgenda(); }
   else scroller.scrollBy({ left: 7 * dayW(), behavior: "smooth" });
 };
 document.getElementById("miniPrev").onclick = () => { miniCursor = new Date(miniCursor.getFullYear(), miniCursor.getMonth() - 1, 1); renderMini(); };
 document.getElementById("miniNext").onclick = () => { miniCursor = new Date(miniCursor.getFullYear(), miniCursor.getMonth() + 1, 1); renderMini(); };
 document.getElementById("weekViewBtn").onclick = () => setView("week");
 document.getElementById("monthViewBtn").onclick = () => setView("month");
+document.getElementById("agendaViewBtn").onclick = () => setView("agenda");
+document.querySelectorAll("#hoursTabs button").forEach(b => b.onclick = () => { PREFS.hoursPeriod = b.dataset.p; savePrefs(); renderHours(); });
 document.getElementById("fabBtn").onclick = () => document.getElementById("newEventBtn").onclick();
 document.getElementById("newEventBtn").onclick = () => {
   const start = minToStr(Math.max(0, Math.min(DAY_MIN - PREFS.defaultDur, (new Date().getHours() + 1) * 60)));
@@ -1517,7 +1770,7 @@ document.getElementById("newEventBtn").onclick = () => {
 };
 document.getElementById("evCancel").onclick = closeModal;
 document.getElementById("evSave").onclick = saveModal;
-document.getElementById("evDelete").onclick = async () => { const id = editingId; closeModal(); if (id) await deleteEvent(id); };
+document.getElementById("evDelete").onclick = deleteFromModal;
 document.getElementById("evDate").onchange = updateRepDayName;
 document.getElementById("evRepeat").onchange = updateRepUntilRow;
 document.getElementById("evAllDay").onchange = updateAllDayRow;
@@ -1571,6 +1824,7 @@ async function performUndo() {
   if (!op) return;
   if (op.type === "recreate") await addEvent(op.data);
   else if (op.type === "delId") await deleteEvent(op.id);
+  else if (op.type === "restoreUntil") await updateEvent(op.id, { until: op.until });
   else if (op.type === "unexclude") {
     if (db) await db.collection("cal_events").doc(op.id).update({ exdates: firebase.firestore.FieldValue.arrayRemove(op.date) });
     else { const e = events.find(x => x.id === op.id); if (e && e.exdates) e.exdates = e.exdates.filter(d => d !== op.date); saveLocal(); renderAll(); }
@@ -1613,7 +1867,7 @@ document.addEventListener("keydown", e => {
 
   // Delete
   if ((e.key === "Delete" || e.key === "Backspace") && !typing && !mod) {
-    if (evOpen && editingId) { e.preventDefault(); const id = editingId; closeModal(); deleteEventUndoable(id); }
+    if (evOpen && editingId) { e.preventDefault(); deleteFromModal(); }
     else if (!evOpen && selectedEvent) {
       e.preventDefault();
       const sel = selectedEvent, ev = events.find(x => x.id === sel.id);
@@ -1696,6 +1950,7 @@ function handleHash() {
   const valid = val && /^\d{4}-\d{2}-\d{2}$/.test(val);
   if (key === "date" && valid) goToDate(parseYmd(val), false);
   else if (key === "month") setView("month");
+  else if (key === "agenda") setView("agenda");
   else if (key === "new") {
     if (valid) goToDate(parseYmd(val), false);
     const start = minToStr(Math.max(0, Math.min(DAY_MIN - PREFS.defaultDur, (new Date().getHours() + 1) * 60)));

@@ -147,6 +147,12 @@ widget.js (Scriptable widget on iPhone)
 
 **Sidebar:** the ☰ button collapses/expands it.
 
+**Views:** **Days** (the timeline), **List** (an agenda grouped by day — tap any item to open it; "Show earlier" / "Show 30 more days" at the ends) and **Month**.
+
+**Repeating events:** when you save or delete one from its popup, you choose **Only this event**, **This and following events**, or **All events**. Dragging a repeating block still moves only that day.
+
+**Hours report:** turn it on in Settings → Hours report. The sidebar (☰ on phone) then shows hours per calendar for the week or month you're looking at, and each day header shows that day's total. Turn it off and it disappears.
+
 **All-day & deadline events:** in the event popup, tick **All-day / deadline** — the time fields disappear and it shows as a chip pinned under the date instead of a timed block. Tick **show countdown** for deadlines (Hajj registration, exam dates) and the chip displays "12d left", counting down each day. These show in the day headers, in month view, and on the iPhone widget.
 
 **Keyboard shortcuts (week view):**
