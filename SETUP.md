@@ -5,7 +5,8 @@ Three files:
 | File | What it is |
 |---|---|
 | `index.html` | The full calendar app (Mac) |
-| `widget.js` | The iPhone home-screen widget (Scriptable) |
+| `widget.js` | The iPhone home-screen / lock-screen widget (Scriptable) |
+| `manifest.json`, `icon-*.png` | Let the app install on your iPhone Home Screen |
 | `SETUP.md` | This guide |
 
 ---
@@ -86,6 +87,28 @@ Then on github.com → your `my-calendar` repo → **Settings → Pages** → So
 
 ---
 
+## Step 3½ — The calendar on your iPhone
+
+Open **https://mekawy801.github.io/my-calendar/** in Safari → Share → **Add to Home Screen**. It opens full-screen with its own icon, like a real app.
+
+On a phone the app switches to phone mode automatically:
+
+| Do this | To |
+|---|---|
+| Swipe left / right | Move through days |
+| **3D** button | Switch between 1, 2 or 3 days on screen |
+| Tap an event | Open / edit it |
+| Long-press empty space | Create an event there (keep dragging down to make it longer) |
+| Long-press an event, then drag | Move it (hold at the screen edge to jump to the next day) |
+| Long-press an event's bottom edge, then drag | Change its end time |
+| ☰ | Slide out the mini calendar, calendars and tasks |
+| ＋ (bottom right) | New event |
+
+Links the widget uses (you can use them in Shortcuts too):
+`…/my-calendar/#date=2026-12-01` opens that day, `#new` opens a new event, `#new=2026-12-01` a new event on that day, `#month` the month view.
+
+---
+
 ## Step 4 — iPhone widget
 
 1. Install **Scriptable** from the App Store (free).
@@ -100,7 +123,17 @@ Then on github.com → your `my-calendar` repo → **Settings → Pages** → So
    - Pick the **Medium** size (or Large for more rows) → **Add Widget**
    - Long-press the new widget → **Edit Widget** → Script: **My Calendar** → When Interacting: **Open App** (or Run Script)
 
-Done. The widget shows today's schedule with color bars per category, greys out finished events, and lists open + overdue tasks. iOS refreshes widgets on its own schedule — usually every 15–30 minutes. Tapping into Scriptable and running the script refreshes it instantly.
+Done. Each size shows something different:
+
+- **Small** — what's on now (or next, with "in 40 min"), plus your nearest deadline countdown
+- **Medium** — today on the left, the next few days on the right, a ＋ to add an event
+- **Large** — deadlines, a 7-day agenda, and overdue/today tasks
+- **Lock Screen** (rectangular, inline, circular) — next event, or days left to your next deadline
+
+Tapping a day opens the calendar on that day. If there's no signal, it shows the last data it loaded (marked "offline").
+To look further ahead, long-press the widget → Edit Widget → **Parameter** → type a number of days (e.g. `7`).
+
+iOS refreshes widgets on its own schedule — the script asks for a refresh when the current event ends or the next one starts (at most every 15 min). Running the script in Scriptable lets you preview every size.
 
 ---
 

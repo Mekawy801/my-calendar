@@ -2,9 +2,18 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>My Calendar</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗓️</text></svg>">
+<!-- Home Screen app (iPhone: Safari → Share → Add to Home Screen) -->
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calendar">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1E1E1E" media="(prefers-color-scheme: dark)">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
@@ -13,7 +22,7 @@
     --text:#1F1F1F; --text-2:#787774; --text-3:#A5A29E;
     --hover:#F4F4F3; --accent:#2383E2; --now:#EB5757; --today-bg:#FBFDFF;
     --shadow:0 8px 30px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
-    --radius:6px; --dayw:150px;
+    --radius:6px; --dayw:150px; --gutw:56px;
   }
   [data-theme=dark]{
     --bg:#1E1E1E; --panel:#232323; --border:#333330; --border-strong:#44443F;
@@ -113,7 +122,7 @@
   .scroller{flex:1; overflow:auto; position:relative; overscroll-behavior-x:contain;}
   .canvas{width:max-content; position:relative;}
   .headrow{display:flex; position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--border);}
-  .corner{position:sticky; left:0; z-index:22; width:56px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);}
+  .corner{position:sticky; left:0; z-index:22; width:var(--gutw); flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);}
   .dayhead{width:var(--dayw); flex-shrink:0; padding:8px 6px 6px; border-left:1px solid var(--border); background:var(--bg);}
   .dayhead .dow{font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-3);}
   .dayhead .dnum{font-size:17px; font-weight:500; margin-top:1px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:50%;}
@@ -124,7 +133,7 @@
   .allday-chip.selected{box-shadow:0 0 0 1.5px var(--bg), 0 0 0 3px var(--accent);}
   .allday-chip .cd{font-weight:600; opacity:.8; margin-left:3px;}
   .bodyrow{display:flex; position:relative;}
-  .gutter{position:sticky; left:0; z-index:15; width:56px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);}
+  .gutter{position:sticky; left:0; z-index:15; width:var(--gutw); flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);}
   .gutter .hr-label{position:absolute; right:8px; transform:translateY(-50%); font-size:10.5px; color:var(--text-3); white-space:nowrap;}
   .tl-col{width:var(--dayw); flex-shrink:0; position:relative; border-left:1px solid var(--border);}
   .tl-col .hr-line{position:absolute; left:0; right:0; border-top:1px solid var(--border); pointer-events:none;}
@@ -194,6 +203,70 @@
   .banner.show{display:block;}
   ::-webkit-scrollbar{width:10px; height:10px;}
   ::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:5px; border:2px solid var(--bg);}
+
+  /* ---------- Phone mode (only kicks in on narrow screens) ---------- */
+  .phone-only{display:none !important;}
+  .fab{position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom)); width:54px; height:54px; border-radius:50%; background:var(--accent); color:#fff; font-size:28px; font-weight:400; line-height:1; box-shadow:0 6px 18px rgba(0,0,0,.22); z-index:40; align-items:center; justify-content:center;}
+  .fab:active{transform:scale(.94);}
+  .drawer-backdrop{position:fixed; inset:0; background:rgba(15,15,15,.35); z-index:44; opacity:0; pointer-events:none; transition:opacity .2s;}
+  .event.lifted{box-shadow:0 6px 16px rgba(0,0,0,.25); transform:scale(1.03); z-index:6;}
+  .toast{position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:#2B2B2B; color:#fff; font-size:13px; padding:8px 14px; border-radius:20px; z-index:60; opacity:0; pointer-events:none; transition:opacity .2s; white-space:nowrap;}
+  .toast.show{opacity:.95;}
+
+  html:has(body.phone){touch-action:manipulation;}
+  body.phone{--gutw:42px; padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right);}
+  body.phone .phone-only{display:flex !important;}
+  body.phone .desk-only{display:none !important;}
+  body.phone .topbar{gap:6px; padding:8px 10px; padding-top:calc(8px + env(safe-area-inset-top));}
+  body.phone .range-label{min-width:0; flex:1; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  body.phone .icon-btn{width:34px; height:34px; font-size:17px;}
+  body.phone .btn{padding:6px 10px;}
+  body.phone .seg button{padding:6px 9px;}
+  body.phone .topbar .spacer{display:none;}
+  body.phone .sync-dot{display:none;}
+  body.phone .sync-dot.local{display:flex;}
+  body.phone .sync-dot #syncText{display:none;}
+  body.phone .seg button{padding:6px 8px; font-size:12.5px;}
+  body.phone #todayBtn{padding:6px 8px; font-size:12.5px;}
+  body.phone #dayCountBtn{padding:6px 7px; font-size:12.5px; min-width:34px; justify-content:center;}
+  body.phone .topbar .icon-btn{width:30px;}
+  /* Sidebar becomes a slide-out drawer */
+  body.phone .sidebar{position:fixed; top:0; bottom:0; left:0; width:286px; max-width:86vw; z-index:45; transform:translateX(-105%); transition:transform .22s ease; box-shadow:var(--shadow); opacity:1; pointer-events:auto; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);}
+  body.phone .layout.collapsed .sidebar{width:286px; opacity:1; pointer-events:auto; border-right:1px solid var(--border);}
+  body.phone.drawer-open .sidebar{transform:none;}
+  body.phone.drawer-open .drawer-backdrop{opacity:1; pointer-events:auto;}
+  body.phone .mini, body.phone .side-section{min-width:0;}
+  body.phone .mini-day{font-size:13px;}
+  body.phone .task .del{opacity:1;}
+  body.phone .filter-row{padding:7px 2px;}
+  /* Timeline: swipe by whole days */
+  body.phone .scroller{scroll-snap-type:x mandatory; scroll-padding-left:var(--gutw); -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; padding-bottom:env(safe-area-inset-bottom);}
+  body.phone .scroller.no-snap{scroll-snap-type:none;}
+  body.phone .scroller::-webkit-scrollbar{display:none;}
+  body.phone .tl-col{scroll-snap-align:start;}
+  body.phone.one-day .tl-col{scroll-snap-stop:always;}
+  body.phone .dayhead{padding:6px 4px 5px;}
+  body.phone .gutter .hr-label{right:5px; font-size:9.5px;}
+  body.phone .event{padding:2px 4px 0; font-size:11px; cursor:default;}
+  body.phone .event .e-title{white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;}
+  body.phone .event .resize-h{height:14px;}
+  body.phone .event .resize-h::after{content:""; position:absolute; left:50%; bottom:4px; width:18px; height:3px; margin-left:-9px; border-radius:2px; background:currentColor; opacity:.25;}
+  body.phone .allday-chip{font-size:10.5px; padding:2px 4px;}
+  /* Month view */
+  body.phone .m-day{padding:2px; gap:1px;}
+  body.phone .m-day .num{font-size:11px; width:20px; height:20px;}
+  body.phone .chip{font-size:9px; padding:0 3px; pointer-events:none;}
+  body.phone .chip b{display:none;}
+  body.phone .more-link{font-size:9px; padding-left:2px;}
+  /* Popups become bottom sheets */
+  body.phone .overlay{align-items:flex-end; padding-top:0;}
+  body.phone .modal{width:100%; max-width:100%; max-height:90vh; border-radius:14px 14px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); animation:sheet .2s ease-out;}
+  @keyframes sheet{from{transform:translateY(40px); opacity:.4;} to{transform:none; opacity:1;}}
+  body.phone .modal input, body.phone .modal select, body.phone .modal textarea, body.phone .task-add input, body.phone .task-add-row2 input, body.phone .task-add-row2 select{font-size:16px;} /* stops iOS zooming in */
+  body.phone .f-row label{width:70px;}
+  body.phone .f-row input[type=time]{min-width:0;}
+  body.phone .modal-actions .btn{padding:9px 14px;}
+  body.phone .cat-pill{padding:6px 12px; font-size:13px;}
 </style>
 </head>
 <body>
@@ -204,20 +277,24 @@
 
 <div class="topbar">
   <button class="icon-btn" id="sidebarToggle" title="Toggle sidebar">☰</button>
-  <h1>🗓️</h1>
+  <h1 class="desk-only">🗓️</h1>
   <button class="btn" id="todayBtn">Today</button>
-  <button class="icon-btn" id="prevBtn" title="Back one week">‹</button>
-  <button class="icon-btn" id="nextBtn" title="Forward one week">›</button>
+  <button class="icon-btn desk-only" id="prevBtn" title="Back one week">‹</button>
+  <button class="icon-btn desk-only" id="nextBtn" title="Forward one week">›</button>
   <div class="range-label" id="rangeLabel"></div>
   <div class="spacer"></div>
   <div class="sync-dot" id="syncDot"><span class="dot"></span><span id="syncText">Synced</span></div>
+  <button class="btn phone-only" id="dayCountBtn" title="Days shown">3D</button>
   <div class="seg">
     <button id="weekViewBtn" class="active">Days</button>
     <button id="monthViewBtn">Month</button>
   </div>
   <button class="icon-btn" id="settingsBtn" title="Settings">⚙︎</button>
-  <button class="btn primary" id="newEventBtn">＋ New event</button>
+  <button class="btn primary desk-only" id="newEventBtn">＋ New event</button>
 </div>
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<button class="fab phone-only" id="fabBtn" title="New event">＋</button>
+<div class="toast" id="toast"></div>
 
 <div class="layout" id="layout">
   <aside class="sidebar">
@@ -309,7 +386,7 @@
   <div class="modal">
     <h2>Settings</h2>
     <div class="f-row"><label>Theme</label>
-      <select id="setTheme"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">Match macOS</option></select>
+      <select id="setTheme"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">Match system</option></select>
     </div>
     <div class="f-row"><label>Week starts</label>
       <select id="setWeekStart"><option value="6">Saturday</option><option value="0">Sunday</option><option value="1">Monday</option></select>
@@ -317,13 +394,16 @@
     <div class="f-row"><label>Time format</label>
       <select id="setHour12"><option value="1">12-hour (2 PM)</option><option value="0">24-hour (14:00)</option></select>
     </div>
+    <div class="f-row phone-only"><label>Phone shows</label>
+      <select id="setPhoneDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option></select>
+    </div>
     <div class="f-row"><label>Snap to</label>
       <select id="setSnap"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select>
     </div>
     <div class="f-row"><label>New events last</label>
       <select id="setDefaultDur"><option value="30">30 min</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select>
     </div>
-    <div class="f-row"><label>Column width</label>
+    <div class="f-row desk-only"><label>Column width</label>
       <input type="range" id="setDayW" min="110" max="280" step="10">
     </div>
     <div class="f-row"><label>Day starts at</label>
@@ -365,11 +445,11 @@ const firebaseConfig = {
 };
 
 const HOUR_PX = 48;
-const GUTTER_W = 56;
+let GUTTER_W = 56;          // 42 in phone mode
 const DAY_MIN = 24 * 60;
 
 /* ================= PREFERENCES (device-local, editable in Settings) ================= */
-const DEFAULT_PREFS = { theme: "light", weekStart: 6, hour12: true, snap: 5, defaultDur: 60, dayW: 150, scrollHour: 7, sidebar: true };
+const DEFAULT_PREFS = { theme: "light", weekStart: 6, hour12: true, snap: 5, defaultDur: 60, dayW: 150, scrollHour: 7, sidebar: true, phoneDays: 3 };
 let PREFS = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem("cal_prefs") || "{}") };
 function savePrefs() { localStorage.setItem("cal_prefs", JSON.stringify(PREFS)); }
 
@@ -378,7 +458,30 @@ function isDark() { return PREFS.theme === "dark" || (PREFS.theme === "auto" && 
 function applyTheme() { document.documentElement.dataset.theme = isDark() ? "dark" : "light"; }
 darkMQ.addEventListener("change", () => { if (PREFS.theme === "auto") { applyTheme(); renderAll(); } });
 
-function applyDayW() { document.documentElement.style.setProperty("--dayw", PREFS.dayW + "px"); }
+function applyDayW() { document.documentElement.style.setProperty("--dayw", dayW() + "px"); }
+
+/* ================= PHONE MODE ================= */
+const phoneMQ = window.matchMedia("(max-width: 700px)");
+let isPhone = phoneMQ.matches;
+function phoneColW() {
+  const w = document.documentElement.clientWidth || window.innerWidth;
+  return (w - GUTTER_W) / (PREFS.phoneDays || 3);
+}
+function applyPhoneClasses() {
+  document.body.classList.toggle("phone", isPhone);
+  document.body.classList.toggle("one-day", isPhone && PREFS.phoneDays === 1);
+  GUTTER_W = isPhone ? 42 : 56;
+  const b = document.getElementById("dayCountBtn");
+  if (b) b.textContent = (PREFS.phoneDays || 3) + "D";
+  if (!isPhone) document.body.classList.remove("drawer-open");
+}
+function openDrawer(open) { document.body.classList.toggle("drawer-open", open); }
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1600);
+}
 
 /* ================= COLOR UTILS (derive tints from one base color) ================= */
 function hexToRgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(c => c + c).join(""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
@@ -526,7 +629,7 @@ function renderMini() {
     if (day.getMonth() !== m) cell.classList.add("dim");
     if (isSameDay(day, new Date())) cell.classList.add("today");
     cell.textContent = day.getDate();
-    cell.onclick = () => { cursor = day; if (view === "month") { miniCursor = new Date(day); renderAll(); } else goToDate(day); };
+    cell.onclick = () => { cursor = day; openDrawer(false); if (view === "month") { miniCursor = new Date(day); renderAll(); } else goToDate(day); };
     grid.appendChild(cell);
   }
 }
@@ -618,7 +721,7 @@ let cols = [];   // day column elements, parallel to days
 let heads = [];  // day head elements, parallel to days
 let extending = false;
 
-function dayW() { return PREFS.dayW; }
+function dayW() { return isPhone ? phoneColW() : PREFS.dayW; }
 
 function buildGutter() {
   const g = document.getElementById("gutterCell");
@@ -654,7 +757,8 @@ function renderHeadAllDay(cell, day) {
     chip.innerHTML = `<span class="lbl"></span>${e.deadline ? `<span class="cd">· ${countdownText(ds)}</span>` : ""}`;
     chip.querySelector(".lbl").textContent = e.title;
     chip.dataset.id = e.id; chip.dataset.date = ds;
-    chip.addEventListener("mousedown", ev => { ev.stopPropagation(); setSelected({ id: e.id, date: ds }); });
+    chip.addEventListener("mousedown", ev => { ev.stopPropagation(); if (recentTouch()) return; setSelected({ id: e.id, date: ds }); });
+    chip.addEventListener("click", ev => { ev.stopPropagation(); if (isPhone || recentTouch()) openModal(e, ds); });
     chip.addEventListener("dblclick", ev => { ev.stopPropagation(); openModal(e, ds); });
     wrap.appendChild(chip);
   }
@@ -717,7 +821,7 @@ function renderColEvents(col, day) {
     if (selectedEvent && selectedEvent.id === e.id && selectedEvent.date === ymd(day)) el.classList.add("selected");
     // Move drag / click
     el.addEventListener("mousedown", ev => {
-      if (ev.button !== 0) return;
+      if (ev.button !== 0 || recentTouch()) return;
       ev.stopPropagation();
       const resize = ev.target.classList.contains("resize-h");
       startDrag(ev, resize ? "resize" : "move", e, ymd(day), el);
@@ -804,9 +908,12 @@ function extendDays(dir) {
 function updateRangeLabel() {
   if (view !== "week" || !days.length) return;
   const idx = Math.max(0, Math.min(days.length - 1, Math.round(scroller.scrollLeft / dayW())));
-  const a = days[idx], b = days[Math.min(days.length - 1, idx + 6)];
+  const a = days[idx], b = days[Math.min(days.length - 1, idx + (isPhone ? PREFS.phoneDays - 1 : 6))];
   cursor = a;
-  const label = a.getMonth() === b.getMonth()
+  const label = isPhone
+    ? (a.getMonth() === b.getMonth() ? MONTHS[a.getMonth()].slice(0, 3) + " " + a.getFullYear()
+        : MONTHS[a.getMonth()].slice(0, 3) + " – " + MONTHS[b.getMonth()].slice(0, 3) + " " + b.getFullYear())
+    : a.getMonth() === b.getMonth()
     ? MONTHS[a.getMonth()] + " " + a.getDate() + " – " + b.getDate() + ", " + b.getFullYear()
     : MONTHS[a.getMonth()].slice(0, 3) + " " + a.getDate() + " – " + MONTHS[b.getMonth()].slice(0, 3) + " " + b.getDate() + ", " + b.getFullYear();
   document.getElementById("rangeLabel").textContent = label;
@@ -890,33 +997,37 @@ function startDrag(ev, mode, evData, dateStr, el) {
 
 // Drag-create on empty column space
 bodyRow.addEventListener("mousedown", ev => {
-  if (ev.button !== 0) return;
+  if (ev.button !== 0 || recentTouch()) return;
   const col = ev.target.closest(".tl-col");
   if (!col || ev.target.closest(".event")) return;
   startDrag(ev, "create", null, col.dataset.date, null);
 });
 
-window.addEventListener("mousemove", ev => {
-  if (!drag) return;
+function beginDragVisual() {
+  drag.moved = true;
+  drag.ghost = makeGhost();
+  document.body.classList.add(drag.mode === "resize" ? "dragging-resize" : "dragging");
+  if (drag.el) drag.el.classList.add("drag-src");
+}
+window.addEventListener("mousemove", ev => { if (drag && !drag.touch) dragMove(ev); });
+function dragMove(ev) {
   const dist = Math.abs(ev.clientX - drag.startClientX) + Math.abs(ev.clientY - drag.startClientY);
   if (!drag.moved && dist < 5) return;
-  if (!drag.moved) {
-    drag.moved = true;
-    drag.ghost = makeGhost();
-    document.body.classList.add(drag.mode === "resize" ? "dragging-resize" : "dragging");
-    if (drag.el) drag.el.classList.add("drag-src");
+  if (!drag.moved) beginDragVisual();
+  // Edge auto-scroll while dragging (mouse; touch uses edgeScrollTick)
+  if (!drag.touch) {
+    const r = scroller.getBoundingClientRect();
+    if (ev.clientX > r.right - 45) scroller.scrollLeft += 14;
+    else if (ev.clientX < r.left + GUTTER_W + 45) scroller.scrollLeft -= 14;
+    if (ev.clientY > r.bottom - 40) scroller.scrollTop += 10;
+    else if (ev.clientY < r.top + 46) scroller.scrollTop -= 10;
   }
-  // Edge auto-scroll while dragging
-  const r = scroller.getBoundingClientRect();
-  if (ev.clientX > r.right - 45) scroller.scrollLeft += 14;
-  else if (ev.clientX < r.left + GUTTER_W + 45) scroller.scrollLeft -= 14;
-  if (ev.clientY > r.bottom - 40) scroller.scrollTop += 10;
-  else if (ev.clientY < r.top + 46) scroller.scrollTop -= 10;
 
   const p = posFromMouse(ev);
   if (drag.mode === "create") {
     const a = drag.anchorMin, b = snapMin(p.min);
-    drag.curStart = Math.min(a, b); drag.curEnd = Math.max(a, b, Math.min(a, b) + snap());
+    drag.curStart = Math.min(a, b);
+    drag.curEnd = Math.min(DAY_MIN, Math.max(a, b, drag.curStart + (drag.touch ? PREFS.defaultDur : snap())));
     drag.curDayIdx = drag.dayIdx; // create stays in the starting column
     setGhost(drag.ghost, drag.dayIdx, drag.curStart, drag.curEnd, fmtTime(minToStr(drag.curStart)) + " – " + fmtTime(minToStr(drag.curEnd)));
   } else if (drag.mode === "move") {
@@ -931,9 +1042,17 @@ window.addEventListener("mousemove", ev => {
     drag.curStart = drag.startMin; drag.curEnd = ne; drag.curDayIdx = days.findIndex(d => ymd(d) === drag.occDate);
     setGhost(drag.ghost, drag.curDayIdx, drag.startMin, ne, "until " + fmtTime(minToStr(ne)));
   }
-});
+}
 
-window.addEventListener("mouseup", async ev => {
+window.addEventListener("mouseup", () => { if (drag && !drag.touch) dragEnd(); });
+function cancelDrag() {
+  if (!drag) return;
+  const d = drag; drag = null;
+  document.body.classList.remove("dragging", "dragging-resize");
+  if (d.ghost) d.ghost.remove();
+  if (d.el) d.el.classList.remove("drag-src");
+}
+async function dragEnd() {
   if (!drag) return;
   const d = drag;
   drag = null;
@@ -975,7 +1094,100 @@ window.addEventListener("mouseup", async ev => {
   } else {
     await updateEvent(e.id, { date: newDate, start, end, dayOfWeek: parseYmd(newDate).getDay() });
   }
-});
+  if (d.touch) toast(d.mode === "resize" ? "Now ends " + fmtTime(end) : "Moved to " + parseYmd(newDate).toLocaleDateString("en-US", { weekday: "short", day: "numeric" }) + ", " + fmtTime(start));
+}
+
+/* ================= TOUCH (phone / iPad) =================
+   tap an event → open it · long-press empty space → create (drag to set length)
+   long-press an event → pick it up and drag · long-press its bottom edge → resize */
+let lastTouch = 0;
+function recentTouch() { return Date.now() - lastTouch < 800; }
+let lp = null;                 // pending long-press
+let edgeTimer = null, lastPt = null, lastEdgeJump = 0;
+const LP_MS = 380, MOVE_TOL = 9;
+const touchPt = t => ({ clientX: t.clientX, clientY: t.clientY, preventDefault() {} });
+
+function cancelLP() { if (lp) { clearTimeout(lp.timer); lp = null; } }
+
+bodyRow.addEventListener("touchstart", ev => {
+  lastTouch = Date.now();
+  cancelLP();
+  if (ev.touches.length !== 1 || drag) return;
+  const t = ev.touches[0];
+  const col = ev.target.closest(".tl-col");
+  if (!col) return;
+  const evEl = ev.target.closest(".event");
+  const info = { x: t.clientX, y: t.clientY, evEl, date: col.dataset.date,
+                 resize: !!(evEl && ev.target.classList.contains("resize-h")) };
+  info.timer = setTimeout(() => activateLP(info), LP_MS);
+  lp = info;
+}, { passive: true });
+
+function activateLP(info) {
+  lp = null;
+  const pt = { clientX: info.x, clientY: info.y, preventDefault() {} };
+  if (info.evEl) {
+    const e = events.find(x => x.id === info.evEl.dataset.id);
+    if (!e) return;
+    startDrag(pt, info.resize ? "resize" : "move", e, info.date, info.evEl);
+  } else {
+    startDrag(pt, "create", null, info.date, null);
+    drag.anchorMin = Math.floor(drag.anchorMin / 15) * 15;
+  }
+  drag.touch = true;
+  beginDragVisual();
+  dragMove(pt);
+  scroller.classList.add("no-snap");
+  if (navigator.vibrate) navigator.vibrate(12);
+  lastPt = pt;
+  clearInterval(edgeTimer);
+  edgeTimer = setInterval(edgeScrollTick, 60);
+}
+
+function edgeScrollTick() {
+  if (!drag || !lastPt) return;
+  const r = scroller.getBoundingClientRect();
+  const headBottom = headRow.getBoundingClientRect().bottom;
+  let dx = 0;
+  if (lastPt.clientX > r.right - 28) dx = 1;
+  else if (lastPt.clientX < r.left + GUTTER_W + 16) dx = -1;
+  if (dx && drag.mode === "move" && Date.now() - lastEdgeJump > 600) {
+    lastEdgeJump = Date.now();
+    scroller.scrollLeft += dx * dayW();
+  }
+  if (lastPt.clientY > r.bottom - 50) scroller.scrollTop += 9;
+  else if (lastPt.clientY < headBottom + 30) scroller.scrollTop -= 9;
+  dragMove(lastPt);
+}
+function stopEdge() { clearInterval(edgeTimer); edgeTimer = null; lastPt = null; scroller.classList.remove("no-snap"); }
+
+window.addEventListener("touchmove", ev => {
+  if (lp) {
+    const t = ev.touches[0];
+    if (!t || Math.abs(t.clientX - lp.x) + Math.abs(t.clientY - lp.y) > MOVE_TOL) cancelLP();
+    return;
+  }
+  if (drag && drag.touch) {
+    ev.preventDefault();             // the finger is dragging an event, not scrolling
+    lastPt = touchPt(ev.touches[0]);
+    dragMove(lastPt);
+  }
+}, { passive: false });
+
+window.addEventListener("touchend", ev => {
+  lastTouch = Date.now();
+  if (lp) {                           // quick tap
+    const info = lp; cancelLP();
+    if (info.evEl) {
+      ev.preventDefault();
+      const e = events.find(x => x.id === info.evEl.dataset.id);
+      if (e) openModal(e, info.date);
+    }
+    return;
+  }
+  if (drag && drag.touch) { ev.preventDefault(); stopEdge(); dragEnd(); }
+}, { passive: false });
+window.addEventListener("touchcancel", () => { cancelLP(); if (drag && drag.touch) { stopEdge(); cancelDrag(); refreshTimelineEvents(); } });
 /* ================= MONTH VIEW ================= */
 function renderMonth() {
   const y = cursor.getFullYear(), m = cursor.getMonth();
@@ -1057,7 +1269,7 @@ function openModal(event, dateStr, startTime, endTime) {
   updateRepUntilRow();
   updateAllDayRow();
   document.getElementById("overlay").classList.add("open");
-  setTimeout(() => document.getElementById("evTitle").focus(), 50);
+  if (!(isPhone && event)) setTimeout(() => document.getElementById("evTitle").focus(), 50);
 }
 function closeModal() { document.getElementById("overlay").classList.remove("open"); editingId = null; }
 
@@ -1111,6 +1323,7 @@ function openSettings() {
   document.getElementById("setDefaultDur").value = String(PREFS.defaultDur);
   document.getElementById("setDayW").value = PREFS.dayW;
   document.getElementById("setScrollHour").value = String(PREFS.scrollHour);
+  document.getElementById("setPhoneDays").value = String(PREFS.phoneDays);
   document.getElementById("settingsOverlay").classList.add("open");
 }
 function bindSettings() {
@@ -1131,6 +1344,7 @@ function bindSettings() {
     scroller.scrollLeft = idx * dayW();
   };
   document.getElementById("setScrollHour").onchange = e => { PREFS.scrollHour = +e.target.value; savePrefs(); };
+  document.getElementById("setPhoneDays").onchange = e => relayout(() => { PREFS.phoneDays = +e.target.value; savePrefs(); });
   document.getElementById("settingsBtn").onclick = openSettings;
   document.getElementById("settingsClose").onclick = () => document.getElementById("settingsOverlay").classList.remove("open");
 }
@@ -1187,7 +1401,28 @@ function applySidebar() {
   document.getElementById("layout").classList.toggle("collapsed", !PREFS.sidebar);
 }
 
-document.getElementById("sidebarToggle").onclick = () => { PREFS.sidebar = !PREFS.sidebar; savePrefs(); applySidebar(); };
+document.getElementById("sidebarToggle").onclick = () => {
+  if (isPhone) { openDrawer(!document.body.classList.contains("drawer-open")); return; }
+  PREFS.sidebar = !PREFS.sidebar; savePrefs(); applySidebar();
+};
+document.getElementById("drawerBackdrop").onclick = () => openDrawer(false);
+
+// Re-fit the day columns (phone ↔ desktop, rotation, 1/2/3-day switch) while keeping the same first day in view
+function relayout(change) {
+  const idx = Math.round(scroller.scrollLeft / dayW());
+  if (change) change();
+  applyPhoneClasses();
+  applyDayW();
+  scroller.scrollLeft = idx * dayW();
+  updateRangeLabel();
+}
+document.getElementById("dayCountBtn").onclick = () => relayout(() => {
+  PREFS.phoneDays = PREFS.phoneDays % 3 + 1; savePrefs();
+  toast(PREFS.phoneDays === 1 ? "1 day" : PREFS.phoneDays + " days");
+});
+phoneMQ.addEventListener("change", () => relayout(() => { isPhone = phoneMQ.matches; }));
+let lastW = window.innerWidth;
+window.addEventListener("resize", () => { if (window.innerWidth !== lastW) { lastW = window.innerWidth; if (isPhone) relayout(); } });
 document.getElementById("todayBtn").onclick = () => {
   const t = new Date();
   cursor = t; miniCursor = t;
@@ -1210,6 +1445,7 @@ document.getElementById("miniPrev").onclick = () => { miniCursor = new Date(mini
 document.getElementById("miniNext").onclick = () => { miniCursor = new Date(miniCursor.getFullYear(), miniCursor.getMonth() + 1, 1); renderMini(); };
 document.getElementById("weekViewBtn").onclick = () => setView("week");
 document.getElementById("monthViewBtn").onclick = () => setView("month");
+document.getElementById("fabBtn").onclick = () => document.getElementById("newEventBtn").onclick();
 document.getElementById("newEventBtn").onclick = () => {
   const start = minToStr(Math.max(0, Math.min(DAY_MIN - PREFS.defaultDur, (new Date().getHours() + 1) * 60)));
   openModal(null, ymd(cursor), start, minToStr(toMin(start) + PREFS.defaultDur));
@@ -1362,6 +1598,7 @@ setInterval(() => {
 
 /* ================= INIT ================= */
 applyTheme();
+applyPhoneClasses();
 applyDayW();
 applySidebar();
 bindSettings();
@@ -1369,6 +1606,27 @@ bindCats();
 initTimeline(new Date());
 initStorage();
 setView("week");
+
+/* ================= LINKS FROM THE WIDGET =================
+   #date=2026-11-25   open on that day
+   #new  /  #new=2026-11-25   open the new-event popup
+   #month             open month view */
+function handleHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h) return;
+  const [key, val] = h.split("=");
+  const valid = val && /^\d{4}-\d{2}-\d{2}$/.test(val);
+  if (key === "date" && valid) goToDate(parseYmd(val), false);
+  else if (key === "month") setView("month");
+  else if (key === "new") {
+    if (valid) goToDate(parseYmd(val), false);
+    const start = minToStr(Math.max(0, Math.min(DAY_MIN - PREFS.defaultDur, (new Date().getHours() + 1) * 60)));
+    openModal(null, valid ? val : ymd(new Date()), start, minToStr(toMin(start) + PREFS.defaultDur));
+  }
+  history.replaceState(null, "", location.pathname + location.search);
+}
+window.addEventListener("hashchange", handleHash);
+requestAnimationFrame(handleHash);
 </script>
 </body>
 </html>
