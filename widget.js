@@ -7,6 +7,10 @@
 // Tapping opens the calendar on that day; the ＋ (medium/large) opens "New event".
 // Works offline: if there's no signal it shows the last data it loaded.
 //
+// Sign-in: the first time, run this script inside Scriptable — it asks for your
+// tracker teacher email + password ONCE and keeps only a sign-in token in the
+// iPhone Keychain (never your password). After that it stays signed in.
+//
 // Optional: long-press the widget → Edit Widget → Parameter → type a number
 // (e.g. 5) to change how many days ahead it looks.
 
@@ -16,6 +20,51 @@ const APP_URL    = "https://mekawy801.github.io/my-calendar/";
 
 const FALLBACK_COLOR = "#9A9A97";
 const USE_24H = false;
+
+// ---------- Sign-in (once) ----------
+const KC = "my-calendar-refresh-token";
+async function postJSON(url, body, form) {
+  const req = new Request(url);
+  req.method = "POST";
+  req.timeoutInterval = 12;
+  req.headers = { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" };
+  req.body = form ? body : JSON.stringify(body);
+  return await req.loadJSON();
+}
+async function promptSignIn() {
+  const a = new Alert();
+  a.title = "Sign in to My Calendar";
+  a.message = "Your Past Paper Tracker teacher email and password. You only do this once — the phone keeps a sign-in token, not your password.";
+  a.addTextField("Email");
+  a.addSecureTextField("Password");
+  a.addAction("Sign in");
+  a.addCancelAction("Cancel");
+  if (await a.presentAlert() === -1) throw new Error("Sign-in cancelled");
+  const j = await postJSON(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
+    { email: a.textFieldValue(0).trim(), password: a.textFieldValue(1), returnSecureToken: true });
+  if (j.error) throw new Error(/INVALID|PASSWORD|EMAIL_NOT_FOUND/.test(j.error.message) ? "Wrong email or password" : j.error.message);
+  Keychain.set(KC, j.refreshToken);
+  return j.refreshToken;
+}
+let ID_TOKEN = null;
+async function signIn() {
+  let rt = Keychain.contains(KC) ? Keychain.get(KC) : null;
+  if (!rt) {
+    if (config.runsInWidget) throw new Error("Open Scriptable and run this script once to sign in.");
+    rt = await promptSignIn();
+  }
+  const j = await postJSON(`https://securetoken.googleapis.com/v1/token?key=${API_KEY}`,
+    "grant_type=refresh_token&refresh_token=" + encodeURIComponent(rt), true);
+  if (j.error) {
+    if (/TOKEN_EXPIRED|INVALID_REFRESH_TOKEN|USER_DISABLED|USER_NOT_FOUND/.test(j.error.message)) {
+      Keychain.remove(KC);
+      throw new Error("Signed out (password changed?). Run the script in Scriptable to sign in again.");
+    }
+    throw new Error(j.error.message);
+  }
+  if (j.refresh_token && j.refresh_token !== rt) Keychain.set(KC, j.refresh_token);
+  ID_TOKEN = j.id_token;
+}
 
 // ---------- Firestore REST ----------
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
@@ -40,6 +89,7 @@ async function fetchAll(col) {
     const url = `${BASE}/${col}?pageSize=300&key=${API_KEY}` + (token ? `&pageToken=${encodeURIComponent(token)}` : "");
     const req = new Request(url);
     req.timeoutInterval = 12;
+    if (ID_TOKEN) req.headers = { Authorization: "Bearer " + ID_TOKEN };
     const j = await req.loadJSON();
     if (j.error) throw new Error(col + ": " + j.error.message);
     docs = docs.concat(j.documents || []);
@@ -53,11 +103,13 @@ const fm = FileManager.local();
 const CACHE = fm.joinPath(fm.documentsDirectory(), "my-calendar-cache.json");
 async function loadData() {
   try {
+    await signIn();
     const [events, tasks, cats] = await Promise.all([fetchAll("cal_events"), fetchAll("cal_tasks"), fetchAll("cal_categories")]);
     const data = { events, tasks, cats, savedAt: Date.now() };
     fm.writeString(CACHE, JSON.stringify(data));
     return { ...data, offline: false };
   } catch (e) {
+    if (/sign|Signed/.test(e.message)) throw e;           // sign-in problems should be visible, not hidden
     if (fm.fileExists(CACHE)) return { ...JSON.parse(fm.readString(CACHE)), offline: true };
     throw e;
   }
@@ -383,12 +435,13 @@ if (config.runsInWidget) {
   // Running inside Scriptable: pick a size to preview
   const a = new Alert();
   a.title = "Preview widget";
-  ["Small", "Medium", "Large", "Lock Screen (rectangular)"].forEach(x => a.addAction(x));
+  ["Small", "Medium", "Large", "Lock Screen (rectangular)", "Sign out on this phone"].forEach(x => a.addAction(x));
   a.addCancelAction("Cancel");
   const i = await a.presentSheet();
   if (i === 0) await (await buildWidget("small")).presentSmall();
   else if (i === 1) await (await buildWidget("medium")).presentMedium();
   else if (i === 2) await (await buildWidget("large")).presentLarge();
   else if (i === 3) await (await buildWidget("accessoryRectangular")).presentAccessoryRectangular();
+  else if (i === 4) { if (Keychain.contains(KC)) Keychain.remove(KC); const ok = new Alert(); ok.title = "Signed out"; ok.addAction("OK"); await ok.present(); }
 }
 Script.complete();

@@ -16,6 +16,7 @@
 <meta name="theme-color" content="#1E1E1E" media="(prefers-color-scheme: dark)">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#FFFFFF; --panel:#FBFBFA; --border:#ECECEA; --border-strong:#E0E0DE;
@@ -283,7 +284,7 @@
   <button class="icon-btn desk-only" id="nextBtn" title="Forward one week">›</button>
   <div class="range-label" id="rangeLabel"></div>
   <div class="spacer"></div>
-  <div class="sync-dot" id="syncDot"><span class="dot"></span><span id="syncText">Synced</span></div>
+  <div class="sync-dot" id="syncDot"><span class="dot"></span><span id="syncText">Connecting…</span></div>
   <button class="btn phone-only" id="dayCountBtn" title="Days shown">3D</button>
   <div class="seg">
     <button id="weekViewBtn" class="active">Days</button>
@@ -409,9 +410,26 @@
     <div class="f-row"><label>Day starts at</label>
       <select id="setScrollHour"></select>
     </div>
+    <div class="f-row" id="accountRow" style="display:none;"><label>Account</label><span id="accountEmail" style="flex:1; font-size:13px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis;"></span><button class="btn" id="signOutBtn" type="button" style="flex:0 0 auto;">Sign out</button></div>
     <div class="modal-actions">
       <div class="spacer"></div>
       <button class="btn primary" id="settingsClose">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-in (only you can open the synced calendar) -->
+<div class="overlay" id="signinOverlay" data-locked="1">
+  <div class="modal" style="width:380px;">
+    <h2>Sign in</h2>
+    <div class="hint" style="margin:-6px 0 14px;">Use your Past Paper Tracker teacher email and password. You stay signed in on this device.</div>
+    <div class="f-row"><label>Email</label><input type="email" id="siEmail" autocomplete="username" autocapitalize="off"></div>
+    <div class="f-row"><label>Password</label><input type="password" id="siPass" autocomplete="current-password"></div>
+    <div class="hint" id="siError" style="color:var(--now); min-height:16px;"></div>
+    <div class="modal-actions">
+      <button class="btn" id="siReset" type="button">Forgot password?</button>
+      <div class="spacer"></div>
+      <button class="btn primary" id="siGo" type="button">Sign in</button>
     </div>
   </div>
 </div>
@@ -512,16 +530,16 @@ function initStorage() {
     try {
       firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
-      db.collection("cal_events").onSnapshot(s => { events = s.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); });
-      db.collection("cal_tasks").onSnapshot(s =>  { tasks  = s.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); });
-      db.collection("cal_categories").onSnapshot(s => {
-        categories = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        sortCats();
-        if (!categories.length && !seededCats) { seededCats = true; DEFAULT_CATS.forEach(c => db.collection("cal_categories").add(c)); }
-        renderAll();
-        if (document.getElementById("catsOverlay").classList.contains("open")) renderCatManager();
+      // Stay signed in on this device until "Sign out" (shared with the tracker on the same site)
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+      firebase.auth().onAuthStateChanged(user => {
+        if (user && user.uid === OWNER_UID) { showSignIn(false); startSync(user); }
+        else {
+          stopSync();
+          if (user) { firebase.auth().signOut(); showSignIn(true, "That account can't open this calendar."); }
+          else showSignIn(true);
+        }
       });
-      document.getElementById("syncText").textContent = "Synced";
       return;
     } catch (e) { console.error("Firebase init failed:", e); }
   }
@@ -534,6 +552,53 @@ function initStorage() {
   sortCats();
   saveLocal();
   renderAll();
+}
+const OWNER_UID = "yObDW0xHlmYFqgEcZT2xjKgVwxn1";   // your teacher account (same as the tracker rules)
+let unsubs = [];
+function syncError(e) {
+  console.error(e);
+  document.getElementById("syncText").textContent = e.code === "permission-denied" ? "No access" : "Sync error";
+}
+function startSync(user) {
+  if (unsubs.length) return;
+  document.getElementById("syncText").textContent = "Synced";
+  document.getElementById("accountRow").style.display = "flex";
+  document.getElementById("accountEmail").textContent = user.email || "";
+  unsubs = [
+    db.collection("cal_events").onSnapshot(s => { events = s.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); }, syncError),
+    db.collection("cal_tasks").onSnapshot(s =>  { tasks  = s.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); }, syncError),
+    db.collection("cal_categories").onSnapshot(s => {
+      categories = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      sortCats();
+      if (!categories.length && !seededCats && !s.metadata.fromCache) { seededCats = true; DEFAULT_CATS.forEach(c => db.collection("cal_categories").add(c)); }
+      renderAll();
+      if (document.getElementById("catsOverlay").classList.contains("open")) renderCatManager();
+    }, syncError)
+  ];
+}
+function stopSync() {
+  unsubs.forEach(u => u()); unsubs = [];
+  events = []; tasks = []; categories = [];
+  document.getElementById("syncText").textContent = "Signed out";
+  document.getElementById("accountRow").style.display = "none";
+  renderAll();
+}
+function showSignIn(open, msg) {
+  document.getElementById("signinOverlay").classList.toggle("open", open);
+  document.getElementById("siError").textContent = msg || "";
+  if (open && !isPhone) setTimeout(() => document.getElementById("siEmail").focus(), 50);
+}
+async function doSignIn() {
+  const email = document.getElementById("siEmail").value.trim(), pass = document.getElementById("siPass").value;
+  const err = document.getElementById("siError");
+  if (!email || !pass) { err.textContent = "Enter your email and password."; return; }
+  err.textContent = "Signing in…";
+  try { await firebase.auth().signInWithEmailAndPassword(email, pass); document.getElementById("siPass").value = ""; }
+  catch (e) {
+    const c = e.code || "";
+    err.textContent = /invalid|wrong|not-found|credential/.test(c) ? "Wrong email or password."
+      : /network/.test(c) ? "No internet connection." : /too-many/.test(c) ? "Too many tries — wait a minute." : (e.message || "Couldn't sign in.");
+  }
 }
 function saveLocal() {
   if (db) return;
@@ -1457,7 +1522,20 @@ document.getElementById("evDate").onchange = updateRepDayName;
 document.getElementById("evRepeat").onchange = updateRepUntilRow;
 document.getElementById("evAllDay").onchange = updateAllDayRow;
 document.getElementById("clearUntil").onclick = () => { document.getElementById("evUntil").value = ""; };
-document.querySelectorAll(".overlay").forEach(ov => ov.addEventListener("click", e => { if (e.target === ov) ov.classList.remove("open"); }));
+document.querySelectorAll(".overlay").forEach(ov => ov.addEventListener("click", e => { if (e.target === ov && !ov.dataset.locked) ov.classList.remove("open"); }));
+document.getElementById("siGo").onclick = doSignIn;
+document.getElementById("siPass").addEventListener("keydown", e => { if (e.key === "Enter") doSignIn(); });
+document.getElementById("siReset").onclick = async () => {
+  const email = document.getElementById("siEmail").value.trim(), err = document.getElementById("siError");
+  if (!email) { err.textContent = "Type your email first."; return; }
+  try { await firebase.auth().sendPasswordResetEmail(email); err.textContent = "Reset link sent to " + email + "."; }
+  catch (e) { err.textContent = e.message; }
+};
+document.getElementById("signOutBtn").onclick = () => {
+  if (!confirm("Sign out of the calendar on this device?")) return;
+  document.getElementById("settingsOverlay").classList.remove("open");
+  firebase.auth().signOut();
+};
 /* ================= CLIPBOARD + UNDO ================= */
 let clipboard = null;         // a plain event object (no id)
 let lastGridPos = null;       // {date, min} of cursor over the grid, for paste
@@ -1527,7 +1605,7 @@ async function pasteAt(pos) {
 }
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { document.querySelectorAll(".overlay.open").forEach(o => o.classList.remove("open")); setSelected(null); }
+  if (e.key === "Escape") { document.querySelectorAll(".overlay.open:not([data-locked])").forEach(o => o.classList.remove("open")); setSelected(null); }
   const evOpen = document.getElementById("overlay").classList.contains("open");
   if (e.key === "Enter" && evOpen && e.target.tagName !== "TEXTAREA") saveModal();
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName);

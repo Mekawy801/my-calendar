@@ -38,23 +38,15 @@ const firebaseConfig = {
 };
 ```
 
-4. **Firestore rules:** in the console go to **Firestore Database → Rules** and add these two blocks inside `match /databases/{database}/documents { ... }`, next to your existing tracker rules:
+4. **Firestore rules:** the calendar is locked to your teacher account (the same `isTeacher()` used by the tracker rules). In **Firestore Database → Rules**, the calendar lines are:
 
 ```
-match /cal_events/{doc} {
-  allow read, write: if true;
-}
-match /cal_tasks/{doc} {
-  allow read, write: if true;
-}
-match /cal_categories/{doc} {
-  allow read, write: if true;
-}
+match /cal_events/{doc}     { allow read, write: if isTeacher(); }
+match /cal_tasks/{doc}      { allow read, write: if isTeacher(); }
+match /cal_categories/{doc} { allow read, write: if isTeacher(); }
 ```
 
-Click **Publish**.
-
-> ⚠️ Like your tracker, `if true` means anyone who discovers your project ID could read/write these two collections. Fine for personal scheduling data, but don't put anything sensitive in event notes. We can lock it down with auth later if you want.
+Click **Publish**. The app asks you to sign in once per device (tracker teacher email + password) and remembers it; the widget does the same once in Scriptable.
 
 5. Reopen `index.html` — the top-right indicator should now say **Synced** (green dot) instead of **Local only**.
 
